@@ -5,8 +5,7 @@ import aiohttp
 async def fetch_post(session, post_id, semaphore):
     url = f'https://jsonplaceholder.typicode.com/posts/{post_id}'
     async with semaphore:
-        log_task = asyncio.create_task(log_fetch_post(post_id))
-        await log_task
+        await log_fetch_post(post_id)
         try:
             async with session.get(url) as response:
                 response.raise_for_status()
