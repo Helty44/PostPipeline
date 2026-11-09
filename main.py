@@ -17,8 +17,6 @@ def run_pipeline():
         post for post in posts
         if post is not None
     ]
-    # with open("results.log", "w", encoding="utf-8"):
-    #     pass
     Path("results.log").write_text("", encoding="utf-8")
 
     processed_posts = analyze_all_posts(valid_posts)
