@@ -4,15 +4,17 @@ import math
 import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor
+from multiprocessing.sharedctypes import Synchronized
+from multiprocessing.synchronize import Lock
 
 logger = logging.getLogger(__name__)
 
 
-shared_counter = None
-shared_lock = None
+shared_counter: Synchronized | None = None
+shared_lock: Lock | None = None
 
 
-def init_worker(counter, lock):
+def init_worker(counter: Synchronized, lock: Lock) -> None:
     global shared_counter, shared_lock
 
     shared_counter = counter
@@ -25,12 +27,18 @@ def analyze_post(post: dict[str, str | int]) -> dict[str, str | int | float] | N
         title = post["title"]
         body = post["body"]
 
+        if not isinstance(title, str) or not isinstance(body, str):
+            raise TypeError("title и body должны быть строками")
+
         complexity_score = sum(math.sin(i) for i in range(1_000_000)) * len(body)
         text_str = (title + body).encode("utf-8")
         text_hash = hashlib.sha256(text_str).hexdigest()
-        result = post.copy()
+        result: dict[str, str | int | float] = post.copy()
         result["complexity_score"] = complexity_score
         result["text_hash"] = text_hash
+
+        if shared_counter is None or shared_lock is None:
+            raise RuntimeError("Worker не инициализирован")
 
         with shared_lock:
             shared_counter.value += 1
@@ -41,7 +49,9 @@ def analyze_post(post: dict[str, str | int]) -> dict[str, str | int | float] | N
         return None
 
 
-def analyze_all_posts(posts: list[dict[str, str | int]]) -> tuple[list[dict[str, str | int | float]], int]:
+def analyze_all_posts(
+    posts: list[dict[str, str | int]],
+) -> tuple[list[dict[str, str | int | float]], int]:
     ctx = multiprocessing.get_context("spawn")
     counter = ctx.Value("i", 0)
     lock = ctx.Lock()
@@ -50,7 +60,8 @@ def analyze_all_posts(posts: list[dict[str, str | int]]) -> tuple[list[dict[str,
     monitor_process.start()
     try:
         with ProcessPoolExecutor(
-            initializer=init_worker, initargs=(counter, lock), mp_context=ctx) as executor:
+            initializer=init_worker, initargs=(counter, lock), mp_context=ctx
+        ) as executor:
             result = []
 
             for post in executor.map(analyze_post, posts):
@@ -83,7 +94,6 @@ def monitor(queue: multiprocessing.Queue) -> None:
 
 
 if __name__ == "__main__":
-
     test_posts = [
         {"id": 1, "title": "Python", "body": "Learning multiprocessing"},
         {"id": 2, "title": "Broken"},
